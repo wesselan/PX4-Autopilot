@@ -538,6 +538,7 @@ private:
 	// Variables used to perform in flight resets and switch between height sources
 	AlphaFilter<Vector3f> _mag_lpf{0.1f};	///< filtered magnetometer measurement for instant reset (Gauss)
 
+	HeightSensorRef _height_sensor_ref{HeightSensorRef::UNKNOWN};
 	float _baro_hgt_offset{0.0f};		///< baro height reading at the local NED origin (m)
 	float _gps_hgt_offset{0.0f};		///< GPS height reading at the local NED origin (m)
 	float _rng_hgt_offset{0.0f};		///< Range height reading at the local NED origin (m)
@@ -659,6 +660,8 @@ private:
 	void resetHorizontalPositionToOpticalFlow();
 	void resetHorizontalPositionToLastKnown();
 	void resetHorizontalPositionTo(const Vector2f &new_horz_pos);
+
+	bool isHeightResetRequired() const;
 
 	void resetVerticalPositionTo(float new_vert_pos);
 
@@ -874,9 +877,6 @@ private:
 	void runMagAndMagDeclFusions(const Vector3f &mag);
 	void run3DMagAndDeclFusions(const Vector3f &mag);
 
-	// control fusion of range finder observations
-	void controlRangeFinderFusion();
-
 	// control fusion of air data observations
 	void controlAirDataFusion();
 
@@ -885,9 +885,6 @@ private:
 
 	// control fusion of multi-rotor drag specific force observations
 	void controlDragFusion();
-
-	// control fusion of pressure altitude observations
-	void controlBaroFusion();
 
 	// control fusion of fake position observations to constrain drift
 	void controlFakePosFusion();
@@ -899,28 +896,18 @@ private:
 	// control fusion of auxiliary velocity observations
 	void controlAuxVelFusion();
 
-	// control for height sensor timeouts, sensor changes and state resets
-	void controlHeightSensorTimeouts();
-
 	void checkVerticalAccelerationHealth();
 
 	// control for combined height fusion mode (implemented for switching between baro and range height)
 	void controlHeightFusion();
+	void checkHeightSensorRefFallback();
+	void controlBaroHeightFusion();
+	void controlGpsHeightFusion();
+	void controlRangeHeightFusion();
+	void controlEvHeightFusion();
 
 	// determine if flight condition is suitable to use range finder instead of the primary height sensor
 	void checkRangeAidSuitability();
-
-	// set control flags to use baro height
-	void setControlBaroHeight();
-
-	// set control flags to use range height
-	void setControlRangeHeight();
-
-	// set control flags to use GPS height
-	void setControlGPSHeight();
-
-	// set control flags to use external vision height
-	void setControlEVHeight();
 
 	void stopMagFusion();
 	void stopMag3DFusion();
@@ -929,13 +916,21 @@ private:
 	void startMag3DFusion();
 
 	void startBaroHgtFusion();
+	void stopBaroHgtFusion();
+
 	void startGpsHgtFusion();
+	void stopGpsHgtFusion();
+
 	void startRngHgtFusion();
+	void stopRngHgtFusion();
 	void startRngAidHgtFusion();
 	void startEvHgtFusion();
+	void stopEvHgtFusion();
 
-	void updateBaroHgtOffset();
-	void updateBaroHgtBias();
+	void updateBaroHgtBias(float height, float height_var);
+	void updateGpsHgtBias(float height, float height_var);
+	void updateRngHgtBias(float height, float height_var);
+	void updateEvHgtBias(float height, float height_var);
 
 	void updateGroundEffect();
 
@@ -1043,6 +1038,9 @@ private:
 	EKFGSF_yaw _yawEstimator{};
 
 	BiasEstimator _baro_b_est{};
+	BiasEstimator _gps_hgt_b_est{};
+	BiasEstimator _rng_hgt_b_est{};
+	BiasEstimator _ev_hgt_b_est{};
 
 	int64_t _ekfgsf_yaw_reset_time{0};	///< timestamp of last emergency yaw reset (uSec)
 	uint8_t _ekfgsf_yaw_reset_count{0};	// number of times the yaw has been reset to the EKF-GSF estimate
