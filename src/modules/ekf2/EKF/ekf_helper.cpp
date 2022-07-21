@@ -1412,7 +1412,7 @@ void Ekf::updateBaroHgtBias(float height_ref, float height_ref_var)
 		_baro_b_est.predict(_dt_ekf_avg);
 
 		if (_baro_data_ready) {
-			float bias = (_baro_sample_delayed.hgt - _baro_hgt_offset) - height_ref;
+			float bias = -_aid_src_baro_hgt.observation - height_ref;
 			float bias_var = sq(_params.baro_noise) + height_ref_var;
 
 			_baro_b_est.fuseBias(bias, bias_var);
@@ -1428,8 +1428,8 @@ void Ekf::updateGpsHgtBias(float height_ref, float height_ref_var)
 		_gps_hgt_b_est.predict(_dt_ekf_avg);
 
 		if (_gps_data_ready) {
-			float bias = (_gps_sample_delayed.hgt - getEkfGlobalOriginAltitude() - _gps_hgt_offset) - height_ref;
-			float bias_var = getGpsHeightVariance() + height_ref_var;
+			float bias = -_aid_src_gnss_pos.observation[2] - height_ref;
+			float bias_var = _aid_src_gnss_pos.observation_variance[2] + height_ref_var;
 
 			_gps_hgt_b_est.fuseBias(bias, bias_var);
 		}
@@ -1439,15 +1439,14 @@ void Ekf::updateGpsHgtBias(float height_ref, float height_ref_var)
 void Ekf::updateRngHgtBias(float height_ref, float height_ref_var)
 {
 	if ((_params.height_sensor_ref != HeightSensorRef::RANGE) && _control_status.flags.rng_hgt) {
-		const float rng_var = getRngHeightVariance();
-		const float rng_noise = sqrtf(rng_var);
+		const float rng_noise = sqrtf(_aid_src_rng_hgt.observation_variance);
 		_rng_hgt_b_est.setMaxStateNoise(rng_noise);
 		_rng_hgt_b_est.setProcessNoiseStdDev(rng_noise); // TODO: fix
 		_rng_hgt_b_est.predict(_dt_ekf_avg);
 
 		if (_rng_data_ready) {
-			float bias = (math::max(_range_sensor.getDistBottom(), _params.rng_gnd_clearance) - _rng_hgt_offset) - height_ref;
-			float bias_var = rng_var + height_ref_var;
+			float bias = -_aid_src_rng_hgt.observation - height_ref;
+			float bias_var = _aid_src_rng_hgt.observation_variance + height_ref_var;
 
 			_rng_hgt_b_est.fuseBias(bias, bias_var);
 		}
