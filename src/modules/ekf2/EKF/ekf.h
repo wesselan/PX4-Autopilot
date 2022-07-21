@@ -537,6 +537,7 @@ private:
 
 	// Variables used to perform in flight resets and switch between height sources
 	AlphaFilter<Vector3f> _mag_lpf{0.1f};	///< filtered magnetometer measurement for instant reset (Gauss)
+	AlphaFilter<float> _baro_lpf{0.1f};	///< filtered barometric height measurement (m)
 
 	HeightSensorRef _height_sensor_ref{HeightSensorRef::UNKNOWN};
 	float _baro_hgt_offset{0.0f};		///< baro height reading at the local NED origin (m)

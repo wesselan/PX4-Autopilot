@@ -1281,7 +1281,7 @@ void Ekf::startBaroHgtFusion()
 			resetHeightToBaro();
 
 		} else {
-			_baro_hgt_offset = _state.pos(2) + _baro_sample_delayed.hgt; // TODO:use lpf value
+			_baro_hgt_offset = _state.pos(2) + _baro_lpf.getState();
 		}
 
 		_control_status.flags.baro_hgt = true;

@@ -855,6 +855,7 @@ void Ekf::controlBaroHeightFusion()
 	}
 
 	if (_baro_data_ready) {
+		_baro_lpf.update(_baro_sample_delayed.hgt);
 		updateBaroHgt(_baro_sample_delayed, _aid_src_baro_hgt);
 
 		const bool continuing_conditions_passing = !_baro_hgt_faulty && !_baro_hgt_intermittent;

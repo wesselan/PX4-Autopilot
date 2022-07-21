@@ -164,10 +164,11 @@ bool Ekf::initialiseFilter()
 	if (_baro_buffer && _baro_buffer->pop_first_older_than(_imu_sample_delayed.time_us, &_baro_sample_delayed)) {
 		if (_baro_sample_delayed.time_us != 0) {
 			if (_baro_counter == 0) {
-				_baro_hgt_offset = _baro_sample_delayed.hgt;
+				_baro_lpf.reset(_baro_sample_delayed.hgt);
 
 			} else {
-				_baro_hgt_offset = 0.9f * _baro_hgt_offset + 0.1f * _baro_sample_delayed.hgt;
+				_baro_lpf.update(_baro_sample_delayed.hgt);
+				_baro_hgt_offset = _baro_lpf.getState();
 			}
 
 			_baro_counter++;
