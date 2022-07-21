@@ -50,11 +50,11 @@ void Ekf::updateBaroHgt(const baroSample &baro_sample, estimator_aid_source_1d_s
 	float obs_var = sq(fmaxf(_params.baro_noise, 0.01f));
 
 	// vertical position innovation - baro measurement has opposite sign to earth z axis
-	baro_hgt.observation = -(_baro_sample_delayed.hgt - _baro_b_est.getBias() - _baro_hgt_offset);
+	baro_hgt.observation = -(_baro_sample_delayed.hgt - _baro_hgt_offset);
 	baro_hgt.observation_variance = obs_var;
 
-	baro_hgt.innovation = _state.pos(2) - baro_hgt.observation;
-	baro_hgt.innovation_variance = P(9, 9) + obs_var;
+	baro_hgt.innovation = _state.pos(2) + _baro_b_est.getBias() - baro_hgt.observation;
+	baro_hgt.innovation_variance = P(9, 9) + _baro_b_est.getBiasVar() + obs_var;
 
 	// Compensate for positive static pressure transients (negative vertical position innovations)
 	// caused by rotor wash ground interaction by applying a temporary deadzone to baro innovations.
@@ -114,8 +114,8 @@ void Ekf::updateRngHgt(estimator_aid_source_1d_s &rng_hgt)
 	rng_hgt.observation = (-math::max(_range_sensor.getDistBottom(), _params.rng_gnd_clearance)) + _rng_hgt_offset;
 	rng_hgt.observation_variance = obs_var;
 
-	rng_hgt.innovation = _state.pos(2) - rng_hgt.observation;
-	rng_hgt.innovation_variance = P(9, 9) + obs_var;
+	rng_hgt.innovation = _state.pos(2) + _rng_hgt_b_est.getBiasVar() - rng_hgt.observation;
+	rng_hgt.innovation_variance = P(9, 9) + _rng_hgt_b_est.getBiasVar() + obs_var;
 
 	setEstimatorAidStatusTestRatio(rng_hgt, innov_gate);
 
@@ -146,13 +146,14 @@ void Ekf::fuseRngHgt(estimator_aid_source_1d_s &rng_hgt)
 void Ekf::fuseEvHgt()
 {
 	// calculate the innovation assuming the external vision observation is in local NED frame
-	_ev_pos_innov(2) = _state.pos(2) - _ev_sample_delayed.pos(2);
+	_ev_pos_innov(2) = _state.pos(2) + _ev_hgt_b_est.getBias() - _ev_sample_delayed.pos(2);
 
 	// innovation gate size
 	float innov_gate = fmaxf(_params.ev_pos_innov_gate, 1.f);
 
 	// observation variance - defined externally
 	float obs_var = fmaxf(_ev_sample_delayed.posVar(2), sq(0.01f));
+	obs_var += _ev_hgt_b_est.getBiasVar(); //TODO: move this to the innovation variance instead
 
 	// _ev_pos_test_ratio(1) is the vertical test ratio
 	fuseVerticalPosition(_ev_pos_innov(2), innov_gate, obs_var,
