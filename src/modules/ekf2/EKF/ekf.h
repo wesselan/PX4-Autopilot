@@ -545,9 +545,6 @@ private:
 	float _rng_hgt_offset{0.0f};		///< Range height reading at the local NED origin (m)
 	float _ev_hgt_offset{0.0f};		///< EV height reading at the local NED origin (m)
 
-	float _baro_hgt_bias{0.0f};
-	float _baro_hgt_bias_var{1.f};
-
 	// Variables used to control activation of post takeoff functionality
 	float _last_on_ground_posD{0.0f};	///< last vertical position when the in_air status was false (m)
 	uint64_t _flt_mag_align_start_time{0};	///< time that inflight magnetic field alignment started (uSec)
