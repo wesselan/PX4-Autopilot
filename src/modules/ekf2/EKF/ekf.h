@@ -540,10 +540,6 @@ private:
 	AlphaFilter<float> _baro_lpf{0.1f};	///< filtered barometric height measurement (m)
 
 	HeightSensorRef _height_sensor_ref{HeightSensorRef::UNKNOWN};
-	float _baro_hgt_offset{0.0f};		///< baro height reading at the local NED origin (m)
-	float _gps_hgt_offset{0.0f};		///< GPS height reading at the local NED origin (m)
-	float _rng_hgt_offset{0.0f};		///< Range height reading at the local NED origin (m)
-	float _ev_hgt_offset{0.0f};		///< EV height reading at the local NED origin (m)
 
 	// Variables used to control activation of post takeoff functionality
 	float _last_on_ground_posD{0.0f};	///< last vertical position when the in_air status was false (m)
@@ -925,10 +921,10 @@ private:
 	void startEvHgtFusion();
 	void stopEvHgtFusion();
 
-	void updateBaroHgtBias(float height, float height_var);
-	void updateGpsHgtBias(float height, float height_var);
-	void updateRngHgtBias(float height, float height_var);
-	void updateEvHgtBias(float height, float height_var);
+	void updateBaroHgtBias(float z, float z_var);
+	void updateGpsHgtBias(float z, float z_var);
+	void updateRngHgtBias(float z, float z_var);
+	void updateEvHgtBias(float z, float z_var);
 
 	void updateGroundEffect();
 
@@ -1035,10 +1031,10 @@ private:
 	// yaw estimator instance
 	EKFGSF_yaw _yawEstimator{};
 
-	BiasEstimator _baro_b_est{};
-	BiasEstimator _gps_hgt_b_est{};
-	BiasEstimator _rng_hgt_b_est{};
-	BiasEstimator _ev_hgt_b_est{};
+	BiasEstimator _baro_b_est{0.f, 0.f};
+	BiasEstimator _gps_hgt_b_est{0.f, 0.f};
+	BiasEstimator _rng_hgt_b_est{0.f, 0.f};
+	BiasEstimator _ev_hgt_b_est{0.f, 0.f};
 
 	int64_t _ekfgsf_yaw_reset_time{0};	///< timestamp of last emergency yaw reset (uSec)
 	uint8_t _ekfgsf_yaw_reset_count{0};	// number of times the yaw has been reset to the EKF-GSF estimate

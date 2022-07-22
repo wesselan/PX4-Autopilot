@@ -50,10 +50,10 @@ void Ekf::updateBaroHgt(const baroSample &baro_sample, estimator_aid_source_1d_s
 	float obs_var = sq(fmaxf(_params.baro_noise, 0.01f));
 
 	// vertical position innovation - baro measurement has opposite sign to earth z axis
-	baro_hgt.observation = -(_baro_sample_delayed.hgt - _baro_hgt_offset);
+	baro_hgt.observation = _baro_sample_delayed.hgt;
 	baro_hgt.observation_variance = obs_var;
 
-	baro_hgt.innovation = _state.pos(2) + _baro_b_est.getBias() - baro_hgt.observation;
+	baro_hgt.innovation = -(-_state.pos(2) + _baro_b_est.getBias() - baro_hgt.observation);
 	baro_hgt.innovation_variance = P(9, 9) + _baro_b_est.getBiasVar() + obs_var;
 
 	// Compensate for positive static pressure transients (negative vertical position innovations)
@@ -111,10 +111,10 @@ void Ekf::updateRngHgt(estimator_aid_source_1d_s &rng_hgt)
 	float innov_gate = fmaxf(_params.range_innov_gate, 1.f);
 
 	// vertical position innovation, use range finder with tilt correction
-	rng_hgt.observation = (-math::max(_range_sensor.getDistBottom(), _params.rng_gnd_clearance)) + _rng_hgt_offset;
+	rng_hgt.observation = math::max(_range_sensor.getDistBottom(), _params.rng_gnd_clearance);
 	rng_hgt.observation_variance = obs_var;
 
-	rng_hgt.innovation = _state.pos(2) + _rng_hgt_b_est.getBiasVar() - rng_hgt.observation;
+	rng_hgt.innovation = -(-_state.pos(2) + _rng_hgt_b_est.getBias() - rng_hgt.observation);
 	rng_hgt.innovation_variance = P(9, 9) + _rng_hgt_b_est.getBiasVar() + obs_var;
 
 	setEstimatorAidStatusTestRatio(rng_hgt, innov_gate);

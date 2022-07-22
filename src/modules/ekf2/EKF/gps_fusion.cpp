@@ -75,9 +75,7 @@ void Ekf::updateGpsPos(const gpsSample &gps_sample)
 	Vector3f position;
 	position(0) = gps_sample.pos(0);
 	position(1) = gps_sample.pos(1);
-
-	// vertical position - gps measurement has opposite sign to earth z axis
-	position(2) = -(gps_sample.hgt - getEkfGlobalOriginAltitude() - _gps_hgt_offset);
+	position(2) = gps_sample.hgt - getEkfGlobalOriginAltitude();
 
 	const float lower_limit = fmaxf(_params.gps_pos_noise, 0.01f);
 
@@ -110,7 +108,10 @@ void Ekf::updateGpsPos(const gpsSample &gps_sample)
 		gps_pos.innovation_variance[i] = P(7 + i, 7 + i) + obs_var(i);
 	}
 
-	gps_pos.innovation[2] = _state.pos(2) + _gps_hgt_b_est.getBias() - position(2);
+	gps_pos.observation[2] = position(2);
+	gps_pos.observation_variance[2] = obs_var(2);
+
+	gps_pos.innovation[2] = -(-_state.pos(2) + _gps_hgt_b_est.getBias() - position(2));
 	gps_pos.innovation_variance[2] = P(9, 9) + _gps_hgt_b_est.getBiasVar() + obs_var(2);
 
 	setEstimatorAidStatusTestRatio(gps_pos, innov_gate);

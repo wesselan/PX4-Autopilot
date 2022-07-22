@@ -742,8 +742,8 @@ void Ekf::controlHeightFusion()
 	// Since the height sensor bias are not part of the main filter,
 	// save the current height estimate to update the bias estimators with data
 	// that doesn't contain the newest measurement.
-	const float height = -_state.pos(2);
-	const float height_var = P(9, 9);
+	const float z = _state.pos(2);
+	const float z_var = P(9, 9);
 
 	controlBaroHeightFusion();
 	controlGpsHeightFusion();
@@ -752,10 +752,10 @@ void Ekf::controlHeightFusion()
 
 	checkHeightSensorRefFallback();
 
-	updateBaroHgtBias(height, height_var);
-	updateGpsHgtBias(height, height_var);
-	updateRngHgtBias(height, height_var);
-	updateEvHgtBias(height, height_var);
+	updateBaroHgtBias(z, z_var);
+	updateGpsHgtBias(z, z_var);
+	updateRngHgtBias(z, z_var);
+	updateEvHgtBias(z, z_var);
 }
 
 void Ekf::checkHeightSensorRefFallback()

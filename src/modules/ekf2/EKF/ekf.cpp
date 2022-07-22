@@ -168,7 +168,8 @@ bool Ekf::initialiseFilter()
 
 			} else {
 				_baro_lpf.update(_baro_sample_delayed.hgt);
-				_baro_hgt_offset = _baro_lpf.getState();
+
+				_baro_b_est.setBias(_baro_lpf.getState());
 			}
 
 			_baro_counter++;
