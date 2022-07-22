@@ -80,17 +80,17 @@ void Ekf::controlFusionModes()
 
 			if (height_source) {
 				ECL_INFO("%llu: EKF aligned, (%s hgt, IMU buf: %i, OBS buf: %i)",
-					 (unsigned long long)_imu_sample_delayed.time_us, height_source, (int)_imu_buffer_length, (int)_obs_buffer_length);
+					 (unsigned long long)_time_imu_delayed, height_source, (int)_imu_buffer_length, (int)_obs_buffer_length);
 			}
 		}
 	}
 
 	if (_baro_buffer) {
 		// check for intermittent data
-		_baro_hgt_intermittent = !isRecent(_time_last_baro, 2 * BARO_MAX_INTERVAL);
+		_baro_hgt_intermittent = !isNewestSampleRecent(_time_last_baro_buffer_push, 2 * BARO_MAX_INTERVAL);
 
 		const uint64_t baro_time_prev = _baro_sample_delayed.time_us;
-		_baro_data_ready = _baro_buffer->pop_first_older_than(_imu_sample_delayed.time_us, &_baro_sample_delayed);
+		_baro_data_ready = _baro_buffer->pop_first_older_than(_time_imu_delayed, &_baro_sample_delayed);
 
 		// if we have a new baro sample save the delta time between this sample and the last sample which is
 		// used below for baro offset calculations
@@ -101,11 +101,11 @@ void Ekf::controlFusionModes()
 
 
 	if (_gps_buffer) {
-		_gps_intermittent = !isRecent(_time_last_gps, 2 * GPS_MAX_INTERVAL);
+		_gps_intermittent = !isNewestSampleRecent(_time_last_gps_buffer_push, 2 * GPS_MAX_INTERVAL);
 
 		// check for arrival of new sensor data at the fusion time horizon
 		_time_prev_gps_us = _gps_sample_delayed.time_us;
-		_gps_data_ready = _gps_buffer->pop_first_older_than(_imu_sample_delayed.time_us, &_gps_sample_delayed);
+		_gps_data_ready = _gps_buffer->pop_first_older_than(_time_imu_delayed, &_gps_sample_delayed);
 
 		if (_gps_data_ready) {
 			// correct velocity for offset relative to IMU
@@ -125,7 +125,7 @@ void Ekf::controlFusionModes()
 
 	if (_range_buffer) {
 		// Get range data from buffer and check validity
-		_rng_data_ready = _range_buffer->pop_first_older_than(_imu_sample_delayed.time_us, _range_sensor.getSampleAddress());
+		_rng_data_ready = _range_buffer->pop_first_older_than(_time_imu_delayed, _range_sensor.getSampleAddress());
 		_range_sensor.setDataReadiness(_rng_data_ready);
 
 		// update range sensor angle parameters in case they have changed
@@ -133,7 +133,7 @@ void Ekf::controlFusionModes()
 		_range_sensor.setCosMaxTilt(_params.range_cos_max_tilt);
 		_range_sensor.setQualityHysteresis(_params.range_valid_quality_s);
 
-		_range_sensor.runChecks(_imu_sample_delayed.time_us, _R_to_earth);
+		_range_sensor.runChecks(_time_imu_delayed, _R_to_earth);
 
 		if (_range_sensor.isDataHealthy()) {
 			// correct the range data for position offset relative to the IMU
@@ -145,7 +145,7 @@ void Ekf::controlFusionModes()
 			if (_control_status.flags.in_air && !_control_status.flags.fixed_wing
 			    && (sq(_state.vel(0)) + sq(_state.vel(1)) < fmaxf(P(4, 4) + P(5, 5), 0.1f))) {
 				_rng_consistency_check.setGate(_params.range_kin_consistency_gate);
-				_rng_consistency_check.update(_range_sensor.getDistBottom(), getRngHeightVariance(), _state.vel(2), P(6, 6), _time_last_imu);
+				_rng_consistency_check.update(_range_sensor.getDistBottom(), getRngHeightVariance(), _state.vel(2), P(6, 6), _time_imu_delayed);
 			}
 		}
 
@@ -157,16 +157,16 @@ void Ekf::controlFusionModes()
 		// This means we stop looking for new data until the old data has been fused, unless we are not fusing optical flow,
 		// in this case we need to empty the buffer
 		if (!_flow_data_ready || (!_control_status.flags.opt_flow && !_hagl_sensor_status.flags.flow)) {
-			_flow_data_ready = _flow_buffer->pop_first_older_than(_imu_sample_delayed.time_us, &_flow_sample_delayed);
+			_flow_data_ready = _flow_buffer->pop_first_older_than(_time_imu_delayed, &_flow_sample_delayed);
 		}
 	}
 
 	if (_ext_vision_buffer) {
-		_ev_data_ready = _ext_vision_buffer->pop_first_older_than(_imu_sample_delayed.time_us, &_ev_sample_delayed);
+		_ev_data_ready = _ext_vision_buffer->pop_first_older_than(_time_imu_delayed, &_ev_sample_delayed);
 	}
 
 	if (_airspeed_buffer) {
-		_tas_data_ready = _airspeed_buffer->pop_first_older_than(_imu_sample_delayed.time_us, &_airspeed_sample_delayed);
+		_tas_data_ready = _airspeed_buffer->pop_first_older_than(_time_imu_delayed, &_airspeed_sample_delayed);
 	}
 
 	// run EKF-GSF yaw estimator once per _imu_sample_delayed update after all main EKF data samples available
@@ -229,7 +229,9 @@ void Ekf::controlExternalVisionFusion()
 		if (_control_status.flags.tilt_align && _control_status.flags.yaw_align) {
 
 			// check for a external vision measurement that has fallen behind the fusion time horizon
-			if (isRecent(_time_last_ext_vision, 2 * EV_MAX_INTERVAL)) {
+			if (isRecent(_ev_sample_delayed.time_us, 2 * EV_MAX_INTERVAL)
+				&& isNewestSampleRecent(_time_last_ext_vision_buffer_push, 2 * EV_MAX_INTERVAL)) {
+
 				// turn on use of external vision measurements for position
 				if (_params.fusion_mode & SensorFusionMask::USE_EXT_VIS_POS && !_control_status.flags.ev_pos) {
 					startEvPosFusion();
@@ -247,7 +249,9 @@ void Ekf::controlExternalVisionFusion()
 		    && _control_status.flags.tilt_align) {
 
 			// don't start using EV data unless data is arriving frequently
-			if (isRecent(_time_last_ext_vision, 2 * EV_MAX_INTERVAL)) {
+			if (isRecent(_ev_sample_delayed.time_us, 2 * EV_MAX_INTERVAL)
+				&& isNewestSampleRecent(_time_last_ext_vision_buffer_push, 2 * EV_MAX_INTERVAL)) {
+
 				if (resetYawToEv()) {
 					_control_status.flags.yaw_align = true;
 					startEvYawFusion();
@@ -378,7 +382,7 @@ void Ekf::controlExternalVisionFusion()
 		_hpos_pred_prev = _state.pos.xy();
 
 	} else if ((_control_status.flags.ev_pos || _control_status.flags.ev_vel ||  _control_status.flags.ev_yaw)
-		   && isTimedOut(_time_last_ext_vision, (uint64_t)_params.reset_timeout_max)) {
+		   && !isNewestSampleRecent(_time_last_ext_vision_buffer_push, (uint64_t)_params.reset_timeout_max)) {
 
 		// Turn off EV fusion mode if no data has been received
 		stopEvFusion();
@@ -462,8 +466,8 @@ void Ekf::controlOpticalFlowFusion()
 
 		// inhibit use of optical flow if motion is unsuitable and we are not reliant on it for flight navigation
 		const bool preflight_motion_not_ok = !_control_status.flags.in_air
-						     && ((_imu_sample_delayed.time_us > (_time_good_motion_us + (uint64_t)1E5))
-								     || (_imu_sample_delayed.time_us < (_time_bad_motion_us + (uint64_t)5E6)));
+						     && ((_time_imu_delayed > (_time_good_motion_us + (uint64_t)1E5))
+								     || (_time_imu_delayed < (_time_bad_motion_us + (uint64_t)5E6)));
 		const bool flight_condition_not_ok = _control_status.flags.in_air && !isTerrainEstimateValid();
 
 		_inhibit_flow_use = ((preflight_motion_not_ok || flight_condition_not_ok) && !is_flow_required)
@@ -488,7 +492,7 @@ void Ekf::controlOpticalFlowFusion()
 				// set the flag and reset the fusion timeout
 				ECL_INFO("starting optical flow fusion");
 				_control_status.flags.opt_flow = true;
-				_time_last_of_fuse = _time_last_imu;
+				_time_last_of_fuse = _time_imu_delayed;
 
 				// if we are not using GPS or external vision aiding, then the velocity and position states and covariances need to be set
 				const bool flow_aid_only = !isOtherSourceOfHorizontalAidingThan(_control_status.flags.opt_flow);
@@ -502,7 +506,7 @@ void Ekf::controlOpticalFlowFusion()
 
 		if (_control_status.flags.opt_flow) {
 			// Wait until the midpoint of the flow sample has fallen behind the fusion time horizon
-			if (_imu_sample_delayed.time_us > (_flow_sample_delayed.time_us - uint32_t(1e6f * _flow_sample_delayed.dt) / 2)) {
+			if (_time_imu_delayed > (_flow_sample_delayed.time_us - uint32_t(1e6f * _flow_sample_delayed.dt) / 2)) {
 				// Fuse optical flow LOS rate observations into the main filter only if height above ground has been updated recently
 				// but use a relaxed time criteria to enable it to coast through bad range finder data
 				if (isRecent(_time_last_hagl_fuse, (uint64_t)10e6)) {
@@ -523,7 +527,7 @@ void Ekf::controlOpticalFlowFusion()
 		}
 
 	} else if (_control_status.flags.opt_flow
-		   && (_imu_sample_delayed.time_us > _flow_sample_delayed.time_us + (uint64_t)10e6)) {
+		   && !isNewestSampleRecent(_time_last_flow_buffer_push, (uint64_t)10e6)) {
 
 		stopFlowFusion();
 	}
@@ -540,17 +544,17 @@ void Ekf::updateOnGroundMotionForOpticalFlowChecks()
 					  || (_R_to_earth(2, 2) < cosf(math::radians(30.0f)))); // tilted excessively
 
 	if (motion_is_excessive) {
-		_time_bad_motion_us = _imu_sample_delayed.time_us;
+		_time_bad_motion_us = _time_imu_delayed;
 
 	} else {
-		_time_good_motion_us = _imu_sample_delayed.time_us;
+		_time_good_motion_us = _time_imu_delayed;
 	}
 }
 
 void Ekf::resetOnGroundMotionForOpticalFlowChecks()
 {
 	_time_bad_motion_us = 0;
-	_time_good_motion_us = _imu_sample_delayed.time_us;
+	_time_good_motion_us = _time_imu_delayed;
 }
 
 void Ekf::controlGpsYawFusion(bool gps_checks_passing, bool gps_checks_failing)
@@ -568,7 +572,7 @@ void Ekf::controlGpsYawFusion(bool gps_checks_passing, bool gps_checks_failing)
 
 		const bool continuing_conditions_passing = !gps_checks_failing;
 
-		const bool is_gps_yaw_data_intermittent = !isRecent(_time_last_gps_yaw_data, 2 * GPS_MAX_INTERVAL);
+		const bool is_gps_yaw_data_intermittent = !isNewestSampleRecent(_time_last_gps_yaw_buffer_push, 2 * GPS_MAX_INTERVAL);
 
 		const bool starting_conditions_passing = continuing_conditions_passing
 				&& _control_status.flags.tilt_align
@@ -576,15 +580,13 @@ void Ekf::controlGpsYawFusion(bool gps_checks_passing, bool gps_checks_failing)
 				&& !is_gps_yaw_data_intermittent
 				&& !_gps_intermittent;
 
-		_time_last_gps_yaw_data = _time_last_imu;
-
 		if (_control_status.flags.gps_yaw) {
 
 			if (continuing_conditions_passing) {
 
 				fuseGpsYaw();
 
-				const bool is_fusion_failing = isTimedOut(_time_last_gps_yaw_fuse, _params.reset_timeout_max);
+				const bool is_fusion_failing = isTimedOut(_time_last_gps_sample_yaw_fuse, _params.reset_timeout_max);
 
 				if (is_fusion_failing) {
 					if (_nb_gps_yaw_reset_available > 0) {
@@ -626,7 +628,7 @@ void Ekf::controlGpsYawFusion(bool gps_checks_passing, bool gps_checks_failing)
 			}
 		}
 
-	} else if (_control_status.flags.gps_yaw && isTimedOut(_time_last_gps_yaw_data, _params.reset_timeout_max)) {
+	} else if (_control_status.flags.gps_yaw && !isNewestSampleRecent(_time_last_gps_yaw_buffer_push, _params.reset_timeout_max)) {
 		// No yaw data in the message anymore. Stop until it comes back.
 		stopGpsYawFusion();
 	}
@@ -729,7 +731,7 @@ void Ekf::controlHeightSensorTimeouts()
 
 			if (_ext_vision_buffer) {
 				const extVisionSample &ev_init = _ext_vision_buffer->get_newest();
-				ev_data_available = isRecent(ev_init.time_us, 2 * EV_MAX_INTERVAL);
+				ev_data_available = isNewestSampleRecent(ev_init.time_us, 2 * EV_MAX_INTERVAL);
 			}
 
 			if (ev_data_available) {
@@ -844,10 +846,10 @@ void Ekf::checkVerticalAccelerationHealth()
 	const bool bad_vert_accel = (are_vertical_pos_and_vel_independant || is_clipping_frequently) && is_inertial_nav_falling;
 
 	if (bad_vert_accel) {
-		_time_bad_vert_accel = _time_last_imu;
+		_time_bad_vert_accel = _time_imu_delayed;
 
 	} else {
-		_time_good_vert_accel = _time_last_imu;
+		_time_good_vert_accel = _time_imu_delayed;
 	}
 
 	// declare a bad vertical acceleration measurement and make the declaration persist
@@ -940,7 +942,7 @@ void Ekf::controlHeightFusion()
 	case VerticalHeightSensor::EV:
 
 		// don't start using EV data unless data is arriving frequently
-		if (!_control_status.flags.ev_hgt && isRecent(_time_last_ext_vision, 2 * EV_MAX_INTERVAL)) {
+		if (!_control_status.flags.ev_hgt && isRecent(_ev_sample_delayed.time_us, 2 * EV_MAX_INTERVAL)) {
 			startEvHgtFusion();
 		}
 
@@ -1052,7 +1054,7 @@ void Ekf::controlAirDataFusion()
 			startAirspeedFusion();
 		}
 
-	} else if (_control_status.flags.fuse_aspd && (_imu_sample_delayed.time_us - _airspeed_sample_delayed.time_us > (uint64_t) 1e6)) {
+	} else if (_control_status.flags.fuse_aspd && !isNewestSampleRecent(_time_last_airspeed_buffer_push, (uint64_t)1e6)) {
 		ECL_WARN("Airspeed data stopped");
 		stopAirspeedFusion();
 	}
@@ -1075,7 +1077,7 @@ void Ekf::controlBetaFusion()
 			// activate the wind states
 			_control_status.flags.wind = true;
 			// reset the timeout timers to prevent repeated resets
-			_time_last_beta_fuse = _time_last_imu;
+			_time_last_beta_fuse = _time_imu_delayed;
 			resetWind();
 		}
 
@@ -1098,7 +1100,7 @@ void Ekf::controlDragFusion()
 
 		dragSample drag_sample;
 
-		if (_drag_buffer->pop_first_older_than(_imu_sample_delayed.time_us, &drag_sample)) {
+		if (_drag_buffer->pop_first_older_than(_time_imu_delayed, &drag_sample)) {
 			fuseDrag(drag_sample);
 		}
 	}
@@ -1109,7 +1111,7 @@ void Ekf::controlAuxVelFusion()
 	if (_auxvel_buffer) {
 		auxVelSample auxvel_sample_delayed;
 
-		if (_auxvel_buffer->pop_first_older_than(_imu_sample_delayed.time_us, &auxvel_sample_delayed)) {
+		if (_auxvel_buffer->pop_first_older_than(_time_imu_delayed, &auxvel_sample_delayed)) {
 
 			if (isHorizontalAidingActive()) {
 

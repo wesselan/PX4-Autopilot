@@ -95,7 +95,7 @@ void Ekf::fuseBaroHgt(estimator_aid_source_1d_s &baro_hgt)
 	    && fuseVelPosHeight(baro_hgt.innovation, baro_hgt.innovation_variance, 5)) {
 
 		baro_hgt.fused = true;
-		baro_hgt.time_last_fuse = _time_last_imu;
+		baro_hgt.time_last_fuse = _time_imu_delayed;
 	}
 }
 
@@ -139,7 +139,7 @@ void Ekf::fuseRngHgt(estimator_aid_source_1d_s &rng_hgt)
 	    && fuseVelPosHeight(rng_hgt.innovation, rng_hgt.innovation_variance, 5)) {
 
 		rng_hgt.fused = true;
-		rng_hgt.time_last_fuse = _time_last_imu;
+		rng_hgt.time_last_fuse = _time_imu_delayed;
 	}
 }
 

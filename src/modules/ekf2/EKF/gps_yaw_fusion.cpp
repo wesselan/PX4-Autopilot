@@ -188,8 +188,8 @@ void Ekf::fuseGpsYaw()
 	_fault_status.flags.bad_hdg = !is_fused;
 
 	if (is_fused) {
-		_time_last_gps_yaw_fuse = _time_last_imu;
-		_time_last_heading_fuse = _time_last_imu;
+		_time_last_gps_sample_yaw_fuse = _time_imu_delayed;
+		_time_last_heading_fuse = _time_imu_delayed;
 	}
 }
 
@@ -210,7 +210,7 @@ bool Ekf::resetYawToGps()
 	const float yaw_variance = sq(fmaxf(_params.gps_heading_noise, 1.0e-2f));
 	resetQuatStateYaw(measured_yaw, yaw_variance, true);
 
-	_time_last_gps_yaw_fuse = _time_last_imu;
+	_time_last_gps_sample_yaw_fuse = _time_imu_delayed;
 	_yaw_signed_test_ratio_lpf.reset(0.f);
 
 	return true;

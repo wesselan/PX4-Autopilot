@@ -426,7 +426,7 @@ bool Ekf::fuseMag(const Vector3f &mag, bool update_all_states)
 	}
 
 	if (!_fault_status.flags.bad_mag_x && !_fault_status.flags.bad_mag_y && !_fault_status.flags.bad_mag_z) {
-		_time_last_mag_3d_fuse = _time_last_imu;
+		_time_last_mag_3d_fuse = _time_imu_delayed;
 		return true;
 	}
 
@@ -674,7 +674,7 @@ bool Ekf::fuseYaw(const float innovation, const float variance)
 		// apply the state corrections
 		fuse(Kfusion, _heading_innov);
 
-		_time_last_heading_fuse = _time_last_imu;
+		_time_last_heading_fuse = _time_imu_delayed;
 
 		return true;
 	}

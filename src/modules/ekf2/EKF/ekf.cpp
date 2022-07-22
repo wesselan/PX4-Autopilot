@@ -146,7 +146,7 @@ bool Ekf::initialiseFilter()
 	if (_mag_buffer) {
 		magSample mag_sample;
 
-		if (_mag_buffer->pop_first_older_than(_imu_sample_delayed.time_us, &mag_sample)) {
+		if (_mag_buffer->pop_first_older_than(_time_imu_delayed, &mag_sample)) {
 			if (mag_sample.time_us != 0) {
 				if (_mag_counter == 0) {
 					_mag_lpf.reset(mag_sample.mag);
@@ -161,7 +161,7 @@ bool Ekf::initialiseFilter()
 	}
 
 	// accumulate enough height measurements to be confident in the quality of the data
-	if (_baro_buffer && _baro_buffer->pop_first_older_than(_imu_sample_delayed.time_us, &_baro_sample_delayed)) {
+	if (_baro_buffer && _baro_buffer->pop_first_older_than(_time_imu_delayed, &_baro_sample_delayed)) {
 		if (_baro_sample_delayed.time_us != 0) {
 			if (_baro_counter == 0) {
 				_baro_hgt_offset = _baro_sample_delayed.hgt;
@@ -223,12 +223,12 @@ bool Ekf::initialiseFilter()
 	initHagl();
 
 	// reset the essential fusion timeout counters
-	_time_last_hgt_fuse = _time_last_imu;
-	_time_last_hor_pos_fuse = _time_last_imu;
-	_time_last_hor_vel_fuse = _time_last_imu;
-	_time_last_hagl_fuse = _time_last_imu;
-	_time_last_flow_terrain_fuse = _time_last_imu;
-	_time_last_of_fuse = _time_last_imu;
+	_time_last_hgt_fuse = _time_imu_delayed;
+	_time_last_hor_pos_fuse = _time_imu_delayed;
+	_time_last_hor_vel_fuse = _time_imu_delayed;
+	_time_last_hagl_fuse = _time_imu_delayed;
+	_time_last_flow_terrain_fuse = _time_imu_delayed;
+	_time_last_of_fuse = _time_imu_delayed;
 
 	// reset the output predictor state history to match the EKF initial values
 	alignOutputFilter();
@@ -419,7 +419,7 @@ void Ekf::calculateOutputStates(const imuSample &imu)
 
 		// calculate a gain that provides tight tracking of the estimator attitude states and
 		// adjust for changes in time delay to maintain consistent damping ratio of ~0.7
-		const float time_delay = fmaxf((imu.time_us - _imu_sample_delayed.time_us) * 1e-6f, _dt_imu_avg);
+		const float time_delay = fmaxf((imu.time_us - _time_imu_delayed) * 1e-6f, _dt_imu_avg);
 		const float att_gain = 0.5f * _dt_imu_avg / time_delay;
 
 		// calculate a corrrection to the delta angle

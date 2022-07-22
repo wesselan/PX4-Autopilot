@@ -108,10 +108,10 @@ public:
 	void set_in_air_status(bool in_air)
 	{
 		if (!in_air) {
-			_time_last_on_ground_us = _time_last_imu;
+			_time_last_on_ground_us = _time_imu_delayed;
 
 		} else {
-			_time_last_in_air = _time_last_imu;
+			_time_last_in_air = _time_imu_delayed;
 		}
 
 		_control_status.flags.in_air = in_air;
@@ -140,7 +140,7 @@ public:
 	void set_gnd_effect()
 	{
 		_control_status.flags.gnd_effect = true;
-		_time_last_gnd_effect_on = _time_last_imu;
+		_time_last_gnd_effect_on = _time_imu_delayed;
 	}
 
 	// set air density used by the multi-rotor specific drag force fusion
@@ -364,16 +364,32 @@ protected:
 	RingBuffer<dragSample> *_drag_buffer{nullptr};
 	RingBuffer<auxVelSample> *_auxvel_buffer{nullptr};
 
-	// timestamps of latest in buffer saved measurement in microseconds
-	uint64_t _time_last_imu{0};
-	uint64_t _time_last_gps{0};
-	uint64_t _time_last_mag{0}; ///< measurement time of last magnetomter sample (uSec)
-	uint64_t _time_last_baro{0};
-	uint64_t _time_last_range{0};
-	uint64_t _time_last_airspeed{0};
-	uint64_t _time_last_ext_vision{0};
-	uint64_t _time_last_optflow{0};
-	uint64_t _time_last_auxvel{0};
+	uint64_t _time_last_gps_buffer_push{0};
+	uint64_t _time_last_gps_yaw_buffer_push{0};
+	uint64_t _time_last_mag_buffer_push{0};
+	uint64_t _time_last_baro_buffer_push{0};
+	uint64_t _time_last_range_buffer_push{0};
+	uint64_t _time_last_airspeed_buffer_push{0};
+	uint64_t _time_last_flow_buffer_push{0};
+	uint64_t _time_last_ext_vision_buffer_push{0};
+	uint64_t _time_last_drag_buffer_push{0};
+	uint64_t _time_last_auxvel_buffer_push{0};
+
+
+	uint64_t _time_imu_delayed{0}; ///< time of current delayed time horizon IMU (uSec)
+
+	// timestamps of newest in buffer saved measurement in microseconds
+	uint64_t _time_newest_imu_sample{0};
+	uint64_t _time_newest_gps_sample{0};
+	uint64_t _time_newest_mag_sample{0}; ///< measurement time of last magnetomter sample (uSec)
+	uint64_t _time_newest_baro_sample{0};
+	uint64_t _time_newest_range_sample{0};
+	uint64_t _time_newest_airspeed_sample{0};
+	uint64_t _time_newest_flow_sample{0};
+	uint64_t _time_newest_ext_vision_sample{0};
+
+	uint64_t _time_newest_aux_vel_sample{0};
+
 	//last time the baro ground effect compensation was turned on externally (uSec)
 	uint64_t _time_last_gnd_effect_on{0};
 

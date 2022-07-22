@@ -136,7 +136,7 @@ void Ekf::fuseGpsVel()
 		for (int i = 0; i < 2; i++) {
 			if (fuseVelPosHeight(gps_vel.innovation[i], gps_vel.innovation_variance[i], i)) {
 				gps_vel.fused[i] = true;
-				gps_vel.time_last_fuse[i] = _time_last_imu;
+				gps_vel.time_last_fuse[i] = _time_imu_delayed;
 			}
 		}
 	}
@@ -147,7 +147,7 @@ void Ekf::fuseGpsVel()
 	if (gps_vel.fusion_enabled[2] && !gps_vel.innovation_rejected[2]) {
 		if (fuseVelPosHeight(gps_vel.innovation[2], gps_vel.innovation_variance[2], 2)) {
 			gps_vel.fused[2] = true;
-			gps_vel.time_last_fuse[2] = _time_last_imu;
+			gps_vel.time_last_fuse[2] = _time_imu_delayed;
 		}
 	}
 }
@@ -164,7 +164,7 @@ void Ekf::fuseGpsPos()
 		for (int i = 0; i < 2; i++) {
 			if (fuseVelPosHeight(gps_pos.innovation[i], gps_pos.innovation_variance[i], 3 + i)) {
 				gps_pos.fused[i] = true;
-				gps_pos.time_last_fuse[i] = _time_last_imu;
+				gps_pos.time_last_fuse[i] = _time_imu_delayed;
 			}
 		}
 	}
@@ -175,7 +175,7 @@ void Ekf::fuseGpsPos()
 	if (gps_pos.fusion_enabled[2] && !gps_pos.innovation_rejected[2]) {
 		if (fuseVelPosHeight(gps_pos.innovation[2], gps_pos.innovation_variance[2], 5)) {
 			gps_pos.fused[2] = true;
-			gps_pos.time_last_fuse[2] = _time_last_imu;
+			gps_pos.time_last_fuse[2] = _time_imu_delayed;
 		}
 	}
 }

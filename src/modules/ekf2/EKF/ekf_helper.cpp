@@ -121,7 +121,7 @@ void Ekf::resetHorizontalVelocityTo(const Vector2f &new_horz_vel)
 	_state_reset_status.velNE_counter++;
 
 	// Reset the timout timer
-	_time_last_hor_vel_fuse = _time_last_imu;
+	_time_last_hor_vel_fuse = _time_imu_delayed;
 }
 
 void Ekf::resetVerticalVelocityTo(float new_vert_vel)
@@ -141,7 +141,7 @@ void Ekf::resetVerticalVelocityTo(float new_vert_vel)
 	_state_reset_status.velD_counter++;
 
 	// Reset the timout timer
-	_time_last_ver_vel_fuse = _time_last_imu;
+	_time_last_ver_vel_fuse = _time_imu_delayed;
 }
 
 void Ekf::resetHorizontalPositionToGps(const gpsSample &gps_sample_delayed)
@@ -210,7 +210,7 @@ void Ekf::resetHorizontalPositionTo(const Vector2f &new_horz_pos)
 	_state_reset_status.posNE_counter++;
 
 	// Reset the timout timer
-	_time_last_hor_pos_fuse = _time_last_imu;
+	_time_last_hor_pos_fuse = _time_imu_delayed;
 }
 
 void Ekf::resetVerticalPositionTo(const float new_vert_pos)
@@ -236,7 +236,7 @@ void Ekf::resetVerticalPositionTo(const float new_vert_pos)
 	_output_vert_new.vert_vel_integ = _state.pos(2);
 
 	// Reset the timout timer
-	_time_last_hgt_fuse = _time_last_imu;
+	_time_last_hgt_fuse = _time_imu_delayed;
 }
 
 void Ekf::resetHeightToBaro()
@@ -434,7 +434,7 @@ bool Ekf::realignYawGPS(const Vector3f &mag)
 		resetMagCov();
 
 		// record the start time for the magnetic field alignment
-		_flt_mag_align_start_time = _imu_sample_delayed.time_us;
+		_flt_mag_align_start_time = _time_imu_delayed;
 
 		// If heading was bad, then we also need to reset the velocity and position states
 		if (badMagYaw) {
@@ -453,7 +453,7 @@ bool Ekf::realignYawGPS(const Vector3f &mag)
 		resetMagCov();
 
 		// record the start time for the magnetic field alignment
-		_flt_mag_align_start_time = _imu_sample_delayed.time_us;
+		_flt_mag_align_start_time = _time_imu_delayed;
 
 		return true;
 	}
@@ -463,13 +463,13 @@ bool Ekf::realignYawGPS(const Vector3f &mag)
 bool Ekf::resetMagHeading()
 {
 	// prevent a reset being performed more than once on the same frame
-	if (_imu_sample_delayed.time_us == _flt_mag_align_start_time) {
+	if (_time_imu_delayed == _flt_mag_align_start_time) {
 		return true;
 	}
 
 	const Vector3f mag_init = _mag_lpf.getState();
 
-	const bool mag_available = (_mag_counter != 0) && isRecent(_time_last_mag, 500000)
+	const bool mag_available = (_mag_counter != 0) && isNewestSampleRecent(_time_last_mag_buffer_push, 500000)
 				   && !magFieldStrengthDisturbed(mag_init);
 
 	// low pass filtered mag required
@@ -500,7 +500,7 @@ bool Ekf::resetMagHeading()
 		resetMagCov();
 
 		// record the time for the magnetic field alignment event
-		_flt_mag_align_start_time = _imu_sample_delayed.time_us;
+		_flt_mag_align_start_time = _time_imu_delayed;
 
 		return true;
 	}
@@ -711,7 +711,7 @@ bool Ekf::setEkfGlobalOrigin(const double latitude, const double longitude, cons
 		const float gps_alt_ref_prev = getEkfGlobalOriginAltitude();
 
 		// reinitialize map projection to latitude, longitude, altitude, and reset position
-		_pos_ref.initReference(latitude, longitude, _time_last_imu);
+		_pos_ref.initReference(latitude, longitude, _time_imu_delayed);
 		_gps_alt_ref = altitude;
 
 		// minimum change in position or height that triggers a reset
@@ -1046,8 +1046,8 @@ void Ekf::update_deadreckoning_status()
 	_control_status.flags.inertial_dead_reckoning = !velPosAiding && !optFlowAiding && !airDataAiding;
 
 	if (!_control_status.flags.inertial_dead_reckoning) {
-		if (_time_last_imu > _params.no_aid_timeout_max) {
-			_time_last_aiding = _time_last_imu - _params.no_aid_timeout_max;
+		if (_time_imu_delayed > _params.no_aid_timeout_max) {
+			_time_last_aiding = _time_imu_delayed - _params.no_aid_timeout_max;
 		}
 	}
 
@@ -1814,7 +1814,7 @@ bool Ekf::resetYawToEKFGSF()
 	resetQuatStateYaw(_yawEstimator.getYaw(), _yawEstimator.getYawVar(), true);
 
 	// record a magnetic field alignment event to prevent possibility of the EKF trying to reset the yaw to the mag later in flight
-	_flt_mag_align_start_time = _imu_sample_delayed.time_us;
+	_flt_mag_align_start_time = _time_imu_delayed;
 	_control_status.flags.yaw_align = true;
 
 	if (_control_status.flags.mag_hdg || _control_status.flags.mag_3D) {
@@ -1831,7 +1831,7 @@ bool Ekf::resetYawToEKFGSF()
 		_inhibit_ev_yaw_use = true;
 	}
 
-	_ekfgsf_yaw_reset_time = _time_last_imu;
+	_ekfgsf_yaw_reset_time = _time_imu_delayed;
 	_ekfgsf_yaw_reset_count++;
 
 	return true;
