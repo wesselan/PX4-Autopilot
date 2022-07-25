@@ -181,9 +181,14 @@ void PositionControl::_velocityControl(const float dt)
 
 	// Use tracking Anti-Windup for horizontal direction: during saturation, the integrator is used to unsaturate the output
 	// see Anti-Reset Windup for PID controllers, L.Rundqwist, 1990
-	const Vector2f acc_sp_xy_limited = Vector2f(_thr_sp) * (CONSTANTS_ONE_G / _hover_thrust);
+	const Vector2f acc_sp_xy_produced = Vector2f(_thr_sp) * (CONSTANTS_ONE_G / _hover_thrust);
 	const float arw_gain = 2.f / _gain_vel_p(0);
-	vel_error.xy() = Vector2f(vel_error) - (arw_gain * (Vector2f(_acc_sp) - acc_sp_xy_limited));
+
+	// The produced acceleration can be greater or smaller than the desired acceleration due to the saturations and the actual vertical thrust (computed independently).
+	// The ARW loop needs to run if the signal is saturated only.
+	const float acc_x_limited = math::min(fabsf(_acc_sp(0)), fabsf(acc_sp_xy_produced(0))) * sign(_acc_sp(0));
+	const float acc_y_limited = math::min(fabsf(_acc_sp(1)), fabsf(acc_sp_xy_produced(1))) * sign(_acc_sp(1));
+	vel_error.xy() = Vector2f(vel_error) - arw_gain * (Vector2f(_acc_sp) - Vector2f(acc_x_limited, acc_y_limited));
 
 	// Make sure integral doesn't get NAN
 	ControlMath::setZeroIfNanVector3f(vel_error);
