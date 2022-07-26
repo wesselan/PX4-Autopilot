@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2021 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2021-2022 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -48,10 +48,39 @@ void Ekf::controlGpsFusion()
 
 	// Check for new GPS data that has fallen behind the fusion time horizon
 	if (_gps_data_ready) {
+		const gpsSample &gps_sample{_gps_sample_delayed};
 
-		updateGpsYaw(_gps_sample_delayed);
-		updateGpsVel(_gps_sample_delayed);
-		updateGpsPos(_gps_sample_delayed);
+		updateGpsYaw(gps_sample);
+
+		// GNSS velocity
+		const Vector3f velocity{gps_sample.vel};
+		const float vel_var = sq(gps_sample.sacc);
+		const Vector3f velocity_obs_var(vel_var, vel_var, vel_var * sq(1.5f));
+		const float velocity_innovation_gate = fmaxf(_params.gps_vel_innov_gate, 1.f);
+		_aid_src_gnss_vel = createVelocityAidSrcStatus(gps_sample.time_us, velocity, velocity_obs_var, velocity_innovation_gate);
+
+
+		// GNSS position, vertical position GNSS measurement has opposite sign to earth z axis
+		const Vector3f position {
+			gps_sample.pos(0),
+			gps_sample.pos(1),
+			-(gps_sample.hgt - getEkfGlobalOriginAltitude() - _gps_hgt_offset)
+		};
+
+		const float pos_var_lower_limit = fmaxf(_params.gps_pos_noise, 0.01f);
+		float pos_var = sq(fmaxf(gps_sample.hacc, pos_var_lower_limit));
+
+		if (!isOtherSourceOfHorizontalAidingThan(_control_status.flags.gps)) {
+			// if we are not using another source of aiding, then we are reliant on the GPS
+			// observations to constrain attitude errors and must limit the observation noise value.
+			float upper_limit = fmaxf(_params.pos_noaid_noise, pos_var_lower_limit);
+			pos_var = fminf(pos_var, upper_limit);
+		}
+
+		const Vector3f position_obs_var{pos_var, pos_var, getGpsHeightVariance()};
+		const float position_innovation_gate = fmaxf(_params.gps_pos_innov_gate, 1.f);
+		_aid_src_gnss_pos = createPositionAidSrcStatus(gps_sample.time_us, position, position_obs_var, position_innovation_gate);
+
 
 		const bool gps_checks_passing = isTimedOut(_last_gps_fail_us, (uint64_t)5e6);
 		const bool gps_checks_failing = isTimedOut(_last_gps_pass_us, (uint64_t)5e6);
@@ -72,8 +101,15 @@ void Ekf::controlGpsFusion()
 				if (continuing_conditions_passing
 				    || !isOtherSourceOfHorizontalAidingThan(_control_status.flags.gps)) {
 
-					fuseGpsVel();
-					fuseGpsPos();
+					_aid_src_gnss_vel.fusion_enabled[0] = true;
+					_aid_src_gnss_vel.fusion_enabled[1] = true;
+					_aid_src_gnss_vel.fusion_enabled[2] = true;
+					fuseVelocity(_aid_src_gnss_vel);
+
+					_aid_src_gnss_pos.fusion_enabled[0] = true;
+					_aid_src_gnss_pos.fusion_enabled[1] = true;
+					_aid_src_gnss_pos.fusion_enabled[2] = _control_status.flags.gps_hgt;
+					fusePosition(_aid_src_gnss_pos);
 
 					if (shouldResetGpsFusion()) {
 						const bool was_gps_signal_lost = isTimedOut(_time_prev_gps_us, 1000000);
@@ -104,20 +140,14 @@ void Ekf::controlGpsFusion()
 							ECL_WARN("GPS fusion timeout - resetting");
 						}
 
-						resetVelocityToGps(_gps_sample_delayed);
-						resetHorizontalPositionToGps(_gps_sample_delayed);
+						resetVelocityToGps(gps_sample);
+						resetHorizontalPositionToGps(gps_sample);
 					}
 
 				} else {
 					stopGpsFusion();
 					_warning_events.flags.gps_quality_poor = true;
 					ECL_WARN("GPS quality poor - stopping use");
-
-					// TODO: move this to EV control logic
-					// Reset position state to external vision if we are going to use absolute values
-					if (_control_status.flags.ev_pos && !(_params.fusion_mode & SensorFusionMask::ROTATE_EXT_VIS)) {
-						resetHorizontalPositionToVision();
-					}
 				}
 
 			} else { // mandatory conditions are not passing
@@ -136,7 +166,6 @@ void Ekf::controlGpsFusion()
 
 					// Stop the vision for yaw fusion and do not allow it to start again
 					stopEvYawFusion();
-					_inhibit_ev_yaw_use = true;
 
 				} else {
 					startGpsFusion();
@@ -147,8 +176,8 @@ void Ekf::controlGpsFusion()
 				if (resetYawToEKFGSF()) {
 					_information_events.flags.yaw_aligned_to_imu_gps = true;
 					ECL_INFO("Yaw aligned using IMU and GPS");
-					resetVelocityToGps(_gps_sample_delayed);
-					resetHorizontalPositionToGps(_gps_sample_delayed);
+					resetVelocityToGps(gps_sample);
+					resetHorizontalPositionToGps(gps_sample);
 				}
 			}
 		}
